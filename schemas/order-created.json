@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OrderCreated",
+  "type": "object",
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "aggregateId": { "type": "string", "format": "uuid" },
+    "payload": {
+      "type": "object",
+      "properties": {
+        "customerId": { "type": "string", "format": "uuid" },
+        "providerId": { "type": "string", "format": "uuid" },
+        "serviceTag": { "type": "string" },
+        "scheduledAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerId", "providerId", "serviceTag", "scheduledAt"]
+    }
+  },
+  "required": ["eventId", "occurredAt", "aggregateId", "payload"]
+}
