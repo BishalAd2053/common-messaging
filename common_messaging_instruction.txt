@@ -1,0 +1,164 @@
+# Background: Car Services Marketplace Application
+
+We are building a cloud-ready microservice-based **Car Services Marketplace**.
+
+## Core Business Idea
+- **Providers (car mechanics)** register their businesses and list services.
+- **Customers** search for providers within a 10-mile radius, view details, and book.
+- **Orders service** manages bookings.
+- **Payments service** handles payment intents and status changes.
+- **Gateway** routes traffic and enforces authentication/authorization.
+- **Frontend** is a React SPA consuming the backend APIs.
+- **Infrastructure** uses Postgres (with PostGIS), Kafka (Redpanda locally), Redis, MinIO/S3, OpenTelemetry, Prometheus/Grafana, Helm, and Terraform.
+
+## Async Communication
+- Each service uses an **outbox pattern** to publish domain events (state changes) to Kafka.
+- Other services subscribe to these events to maintain data consistency and workflows.
+- This decouples services and allows reliable, scalable communication.
+
+---
+
+# Where `common-messaging` fits in
+
+`common-messaging` is a **shared library for event definitions, schemas, and serialization utilities**.
+
+- It ensures that **all services agree on the structure of events** they exchange (e.g., a `ProviderRegistered` event looks the same no matter who consumes it).
+- It prevents **drift**: without this, services could produce/consume slightly different event formats, leading to runtime errors.
+- It allows us to **validate events against schemas** (JSON Schema/Avro) before publishing/consuming.
+- It provides **ready-to-use Java classes** (records) representing events, so service code can work with typed objects instead of raw JSON.
+
+---
+
+# Purpose of `common-messaging`
+
+- Define **canonical event schemas** used in the marketplace.
+- Generate or provide **typed event classes** for Java services.
+- Provide **serialization/deserialization utilities** for Kafka (integrated with Schema Registry).
+- Provide **contract tests and helpers** for services to verify they produce/consume valid events.
+- Depend on `common-domain` for primitives (e.g., `GeoPoint`, `Money`, `ServiceTag`) where applicable.
+
+---
+
+# Scope (what belongs here)
+
+1. **Event Definitions (Schemas)**  
+   Stored under `libs/common-messaging/schemas/`.  
+   Examples:
+   - `ProviderRegistered`, `ProviderUpdated`
+   - `OrderCreated`, `OrderStatusChanged`
+   - `PaymentIntentCreated`, `PaymentCaptured`, `PaymentFailed`
+
+   Each event includes:
+   - `eventId` (UUID)
+   - `occurredAt` (timestamp)
+   - `aggregateId` (ID of provider, order, or payment)
+   - `payload` (domain-specific data)
+
+2. **Typed Event Classes (Java)**  
+   - Generated from schemas (via Maven plugin) or hand-written as `record`s.
+   - Must include validation logic if not schema-generated.
+
+3. **Serialization Utilities**  
+   - Kafka SerDes configured for Avro or JSON Schema.
+   - Helper methods for publishing and consuming events safely.
+
+4. **Testing Support**  
+   - Sample producer/consumer test to validate event roundtrip.
+   - Pact-like contract test setup for event validation.
+
+---
+
+# Non-Goals (what does NOT belong here)
+
+- No service-specific adapters or repositories.
+- No outbox logic (that belongs in services).
+- No controllers or REST APIs.
+- No direct Kafka configuration (services configure their consumers/producers, but they depend on this library’s SerDes).
+
+---
+
+# How Services Use It
+
+1. **Add dependency** in their POM.  
+2. **Import event classes** from `common-messaging` when producing/consuming Kafka messages.  
+   - Example: Accounts service publishes `ProviderRegistered`.  
+   - Orders service consumes it to update its own read model.  
+3. **Use provided SerDes** to configure Kafka producer/consumer.  
+4. **Validate contracts**:  
+   - Services write consumer/provider tests to ensure events match schema.  
+
+---
+
+# Design Principles
+
+- **Schema-first**: Start with JSON Schema/Avro definitions, generate Java classes.  
+- **Versioned schemas**: Breaking changes → new schema version.  
+- **Event immutability**: Once published, an event’s definition cannot be changed retroactively.  
+- **Backward compatibility**: Additive changes only (new optional fields).  
+- **Tight integration with `common-domain`**: Use shared primitives where meaningful.  
+
+---
+
+# Versioning & Release Process
+
+- Start at v1.0.0.  
+- Patch versions = bug fixes.  
+- Minor versions = new events or new optional fields.  
+- Major versions = incompatible schema changes (should be rare).  
+- Release via Maven (local install or registry).  
+
+---
+
+# Acceptance Criteria
+
+- Build succeeds on Java 21 with Maven.  
+- Event schemas are stored under `schemas/` and validated.  
+- Java event classes are generated or hand-written.  
+- Kafka SerDes are provided and tested.  
+- Unit tests cover at least one full producer→consumer roundtrip.  
+- README documents:  
+  - Purpose of this module.  
+  - How to add dependency.  
+  - How to publish/consume an event.  
+
+---
+
+# Delivery Plan (Associate Developer)
+
+### Day 1
+- Create `libs/common-messaging` structure.  
+- Add Maven build setup (schema plugin).  
+- Define schemas for at least:
+  - `ProviderRegistered`  
+  - `OrderCreated`  
+  - `PaymentIntentCreated`  
+- Generate Java classes (or create records manually).  
+- Write initial README.  
+
+### Day 2
+- Add SerDes utilities for Kafka.  
+- Write unit tests for event serialization/deserialization.  
+- Integrate `common-domain` types into events where relevant.  
+- Cut release v1.0.0.  
+- Document usage for service developers.  
+
+---
+
+# Risks & Mitigation
+
+- **Schema drift**: solved by centralizing here.  
+- **Breaking changes**: mitigate with schema versioning.  
+- **Services bypassing library**: enforce dependency in reviews/CI.  
+
+---
+
+# Documentation to Produce
+
+- **README.md**: What this library is, how to build, how to use.  
+- **Schemas directory**: versioned schemas with clear naming.  
+- **CHANGELOG.md**: Start at v1.0.0.  
+- **Usage notes**: How to consume in Accounts/Orders/Payments.  
+
+---
+
+# End of Instructions
